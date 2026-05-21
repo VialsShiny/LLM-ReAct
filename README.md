@@ -89,14 +89,9 @@ bun run index.ts
 LLM-ReAct/
 ├── src/
 │   ├── components/
-│   │   ├── formatOfResponse.ts   # Nettoyage JSON & formatage de l'output
-│   │   └── getHTMLPages.ts       # Récupération & parsing HTML
 │   ├── constant/
-│   │   └── LLMNeeds.constants.ts # Prompts & URLs cibles
 │   └── modules/
 │       └── LLM.ts                # Wrapper Groq avec gestion du rate-limit
-├── notes/
-│   └── rapport.md                # Output généré
 ├── index.ts                      # Pipeline principal
 ├── .env.example
 └── package.json
