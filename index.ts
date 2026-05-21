@@ -1,5 +1,6 @@
-import { MISSION, TOOLS } from "./src/constant/tools.constants";
+import { ACTIVE_SKILLS, MISSION, TOOLS } from "./src/constant/tools.constants";
 import { llm, type Message } from "./src/modules/LLM";
+import { loadSkills } from "./src/modules/skillsLoader";
 import { fetchUrl } from "./src/tools/fetchUrl";
 import { runJs } from "./src/tools/runJs";
 import { saveNote } from "./src/tools/saveNote";
@@ -27,10 +28,12 @@ async function main() {
   console.log("🚀 Démarrage de l'agent ReAct");
   console.log(`📋 Mission : ${MISSION.trim()}\n`);
 
+  const skillsInstructions = loadSkills(ACTIVE_SKILLS);
+
   const messages: Message[] = [
     {
       role: "system",
-      content: "Tu es un agent de recherche et de rédaction autonome. Tu penses à voix haute avant chaque action. REGLE ABSOLUE : N'utilise JAMAIS 'run_js' pour générer, formater ou afficher du texte ou du Markdown via un console.log. Pour sauvegarder ton travail ou écrire le rapport final, utilise exclusivement l'outil 'save_note'. Quand ta mission est terminée et le rapport sauvegardé, conclus sans appeler d'outil.",
+      content: `Tu es un agent de recherche et de rédaction autonome. Tu penses à voix haute avant chaque action. REGLE ABSOLUE : N'utilise JAMAIS 'run_js' pour générer, formater ou afficher du texte ou du Markdown via un console.log. Pour sauvegarder ton travail ou écrire le rapport final, utilise exclusivement l'outil 'save_note'. Quand ta mission est terminée et le rapport sauvegardé, conclus sans appeler d'outil.${skillsInstructions}`,
     },
     {
       role: "user",
