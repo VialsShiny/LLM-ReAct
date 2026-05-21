@@ -52,6 +52,9 @@ react-llm/
 │       └── tools.constants.ts      # Définitions des tools + mission de test
 ├── notes/
 │   └── rapport.md                  # Généré par l'agent
+├── skills/
+│   └── marseillais                  # Exemple de Skill
+│       └── SKILLS.md                # Fichier contenant les skills attendues
 ├── .env.example
 └── package.json
 ```
