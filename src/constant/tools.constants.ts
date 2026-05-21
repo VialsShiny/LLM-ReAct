@@ -1,3 +1,6 @@
+// Charger son Skills ici en rapport aux skills trouver dans le folder `/skills`
+export const ACTIVE_SKILLS = ["marseillais"];
+
 export const TOOLS = [
   {
     type: "function",
@@ -44,27 +47,27 @@ export const TOOLS = [
 ];
 
 export const MISSION = `
-Choisis une URL aléatoire intéressante et fais-en une présentation claire et moderne.
+Tu présentes une URL intéressante de manière claire, moderne et naturelle.
 
-Je veux :
-- un résumé rapide ;
+Le contenu doit inclure :
+- un court résumé ;
 - des titres et sous-titres ;
 - un slogan ;
 - les points importants ;
-- une mise en page propre en Markdown.
+- une structure Markdown propre.
 
-Utilise :
-# Titres
-## Sous-titres
+Format attendu :
+# Titre
+## Sous-titre
 - listes
-\`\`\`code\`\`\` (si utile)
+\`\`\`code\`\`\` si nécessaire
 
-Style présentation professionnelle et facile à lire.
+Le ton doit rester flexible pour permettre l’utilisation d’un style ou d’un personnage personnalisé.
 
 ---
 
 # Ne jamais enlever cette partie
-Le rendu doit être rédigé en français, avec un Markdown propre et lisible.
-Ne jamais utiliser de caractères d'échappement comme \\n dans la sortie :
-le texte doit contenir de vrais retours à la ligne et un formatage naturel.
+Le rendu doit être rédigé avec un Markdown propre et lisible.
+Ne jamais utiliser de caractères d'échappement comme \\n :
+utiliser de vrais retours à la ligne et un formatage naturel.
 `;
