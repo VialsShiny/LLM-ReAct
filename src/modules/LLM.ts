@@ -1,32 +1,41 @@
-type Message = {
-  role: "system" | "user" | "assistant";
-  content: string;
+export type Message = {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | null;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
 };
 
-// Function/Promise pour faire dodo le code.
-const sleep = (ms: number) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+export type ToolCall = {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
+};
 
-// Appelle du LLM avec ses instructions
+export type LLMResponse = {
+  finish_reason: "stop" | "tool_calls" | "length";
+  message: Message;
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Appelle le LLM Groq avec support des tool_calls.
+ * Gère le rate limit avec retry automatique.
+ */
 export async function llm(
   messages: Message[],
+  tools: object[],
   retryCount = 0
-) {
+): Promise<LLMResponse> {
   const apiUrl = process.env.GROQ_API_URL;
-
-  if (!apiUrl) {
-    throw new Error("Groq API URL not set in .env");
-  }
-
   const apiKey = process.env.GROQ_API_KEY;
 
-  if (!apiKey) {
-    throw new Error("Groq API key not set in .env");
-  }
+  if (!apiUrl) throw new Error("GROQ_API_URL non défini dans .env");
+  if (!apiKey) throw new Error("GROQ_API_KEY non défini dans .env");
 
-  console.log("\n🤖 Sending request to Groq...");
-
-  // Appelle API vers le LLM Groq avec les instructions
   const response = await fetch(`${apiUrl}/v1/chat/completions`, {
     method: "POST",
     headers: {
@@ -37,50 +46,36 @@ export async function llm(
       model: "llama-3.3-70b-versatile",
       temperature: 0.3,
       messages,
+      tools,
+      tool_choice: "auto",
     }),
   });
 
   const data: any = await response.json();
 
-  // RATE LIMIT HANDLER
-  if (
-    !response.ok &&
-    data?.error?.code === "rate_limit_exceeded"
-  ) {
-    const waitTime = 15000;
-
-    console.log(
-      "\n⚠️ Rate limit reached on Groq API."
-    );
-
-    console.log(
-      `⏳ Waiting ${waitTime / 1000}s before retry...`
-    );
-
-    console.log(
-      `🔁 Retry attempt: ${retryCount + 1}\n`
-    );
+  // RATE LIMIT — attente et retry
+  if (!response.ok && data?.error?.code === "rate_limit_exceeded") {
+    const waitTime = 15_000;
+    console.log(`\n⚠️  Rate limit Groq. Attente ${waitTime / 1000}s... (retry #${retryCount + 1})`);
 
     await sleep(waitTime);
-
-    return llm(messages, retryCount + 1);
+    return llm(messages, tools, retryCount + 1);
   }
 
-  // OTHER API ERRORS HANDLER
+  // AUTRES ERREURS API
   if (!response.ok) {
-    console.error("\n❌ Groq API Error:");
-    console.error(data);
-
     throw new Error(
-      `Groq API Error ${response.status}:\n${JSON.stringify(
-        data,
-        null,
-        2
-      )}`
+      `Groq API Error ${response.status}:\n${JSON.stringify(data, null, 2)}`
     );
   }
 
-  console.log("✅ Response received from Groq.\n");
+  const choice = data.choices?.[0];
+  if (!choice) {
+    throw new Error("Réponse Groq vide (aucun choice retourné)");
+  }
 
-  return data;
+  return {
+    finish_reason: choice.finish_reason,
+    message: choice.message,
+  };
 }

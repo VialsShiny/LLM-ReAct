@@ -1,140 +1,109 @@
-import { cleanJsonResponse, formatContent } from "./src/components/formatOfResponse";
-import { getHTMLPages } from "./src/components/getHTMLPages";
-import { llm } from "./src/modules/LLM";
+import { MISSION, TOOLS } from "./src/constant/tools.constants";
+import { llm, type Message } from "./src/modules/LLM";
+import { fetchUrl } from "./src/tools/fetchUrl";
+import { runJs } from "./src/tools/runJs";
+import { saveNote } from "./src/tools/saveNote";
 
-import { pagesUrl, rules } from "./src/constant/LLMNeeds.constants";
+const MAX_TURNS = 15;
 
-type ReviewResult = {
-  valid: boolean;
-  score: number;
-  missing: string[];
-  hallucinations: string[];
-  feedback: string;
-  improved_summary: string;
-};
+// ─── Dispatcher d'outils ─────────────────────────────────────────────────────
+
+async function execute(name: string, args: Record<string, string>): Promise<string> {
+  switch (name) {
+    case "fetch_url":
+      return await fetchUrl(args.url!);
+    case "run_js":
+      return await runJs(args.code!);
+    case "save_note":
+      return await saveNote(args.content!);
+    default:
+      return `❌ Outil inconnu : "${name}"`;
+  }
+}
+
+// ─── Boucle ReAct ────────────────────────────────────────────────────────────
 
 async function main() {
-  const allPages = await getHTMLPages(pagesUrl);
+  console.log("🚀 Démarrage de l'agent ReAct");
+  console.log(`📋 Mission : ${MISSION.trim()}\n`);
 
-  let writeInFile = "";
+  const messages: Message[] = [
+    {
+      role: "system",
+      content: "Tu es un agent de recherche et de rédaction autonome. Tu penses à voix haute avant chaque action. REGLE ABSOLUE : N'utilise JAMAIS 'run_js' pour générer, formater ou afficher du texte ou du Markdown via un console.log. Pour sauvegarder ton travail ou écrire le rapport final, utilise exclusivement l'outil 'save_note'. Quand ta mission est terminée et le rapport sauvegardé, conclus sans appeler d'outil.",
+    },
+    {
+      role: "user",
+      content: MISSION.trim(),
+    },
+  ];
 
-  for (const [url, html] of Object.entries(allPages)) {
-    if (!html) continue;
+  let turn = 0;
 
-    console.log(`\n=== ANALYSE : ${url} ===\n`);
+  while (turn < MAX_TURNS) {
+    turn++;
+    console.log(`\n── Tour ${turn} ${"─".repeat(44 - String(turn).length)}`);
 
-    let summary = "";
-    let valid = false;
+    const { finish_reason, message } = await llm(messages, TOOLS);
 
-    let attempts = 0;
-    const maxAttempts = 3;
+    console.log(`stop_reason : ${finish_reason}`);
 
-    while (!valid && attempts < maxAttempts) {
-      console.log(`Tentative ${attempts + 1}`);
-
-      // =========================
-      // STEP 1 — GENERATE SUMMARY
-      // =========================
-
-      const summarizePrompt = rules.summarize(html);
-
-      const summaryResponse: any = await llm([
-        {
-          role: "system",
-          content: summarizePrompt.system,
-        },
-        {
-          role: "user",
-          content: summarizePrompt.user,
-        },
-      ]);
-
-      summary =
-        summaryResponse?.choices?.[0]?.message?.content || "";
-
-      if (!summary) {
-        throw new Error("No summary generated");
+    if (finish_reason === "stop") {
+      console.log("\n✅ Mission terminée.");
+      if (message.content) {
+        console.log(`\n💬 Réponse finale :\n${message.content}`);
       }
-
-      // =========================
-      // STEP 2 — REVIEW SUMMARY
-      // =========================
-
-      const reviewPrompt = rules.review(html, summary);
-
-      const reviewResponse: any = await llm([
-        {
-          role: "system",
-          content: reviewPrompt.system,
-        },
-        {
-          role: "user",
-          content: reviewPrompt.user,
-        },
-      ]);
-
-      const rawReview =
-        reviewResponse?.choices?.[0]?.message?.content || "";
-
-      let review: ReviewResult;
-
-      try {
-        const cleaned = cleanJsonResponse(rawReview);
-
-        review = JSON.parse(cleaned);
-      } catch (error) {
-        console.error("\nJSON PARSE ERROR\n");
-        console.error(rawReview);
-
-        review = {
-          valid: false,
-          score: 0,
-          missing: [],
-          hallucinations: [],
-          feedback: "Invalid JSON returned by model",
-          improved_summary: summary,
-        };
-      }
-
-      console.log(`Score: ${review.score}/10`);
-      console.log(`Valid: ${review.valid}`);
-
-      if (review.feedback) {
-        console.log(`Feedback: ${review.feedback}`);
-      }
-
-      if (review.missing.length > 0) {
-        console.log("Missing:", review.missing);
-      }
-
-      if (review.hallucinations.length > 0) {
-        console.log(
-          "Hallucinations:",
-          review.hallucinations
-        );
-      }
-
-      valid = review.valid;
-
-      // Self-healing loop
-      if (!valid) {
-        summary = review.improved_summary;
-      }
-
-      attempts++;
+      break;
     }
 
-    const result = `\n\n${formatContent(
-      summary,
-      url
-    )}\n\n`;
+    if (finish_reason === "tool_calls") {
+      messages.push(message);
+      const toolCalls = message.tool_calls ?? [];
 
-    writeInFile += result;
+      const toolPromises = toolCalls.map(async (toolCall) => {
+        const name = toolCall.function.name;
+        let args: Record<string, string>;
+
+        try {
+          args = JSON.parse(toolCall.function.arguments);
+        } catch {
+          args = {};
+          console.warn(`⚠️ Arguments JSON invalides pour ${name}`);
+        }
+
+        const argsPreview = JSON.stringify(args).slice(0, 60);
+        console.log(`🔧 ${name}(${argsPreview}...)`);
+
+        let result: string;
+        try {
+          result = await execute(name, args);
+        } catch (err: any) {
+          result = `❌ Erreur lors de l'exécution : ${err.message}`;
+        }
+
+        console.log(`📤 → ${result.slice(0, 120)}... `);
+
+        return {
+          role: "tool" as const,
+          tool_call_id: toolCall.id,
+          content: result,
+        };
+      });
+
+      const toolResponses = await Promise.all(toolPromises);
+      messages.push(...toolResponses);
+      continue;
+    }
+
+    console.warn(`⚠️ finish_reason inattendu: "${finish_reason}". Arrêt.`);
+    break;
   }
 
-  await Bun.write("notes/rapport.md", writeInFile);
+  if (turn >= MAX_TURNS) {
+    console.log(`\n⛔ Limite de ${MAX_TURNS} tours atteinte.`);
+  }
 
-  console.log("\nRapport généré : notes/rapport.md");
+  console.log("\n📄 Rapport disponible dans : notes/rapport.md\n");
 }
 
 main().catch(console.error);
