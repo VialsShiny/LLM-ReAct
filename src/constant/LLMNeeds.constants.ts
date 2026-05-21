@@ -1,8 +1,8 @@
 const pagesUrl = [
-  // "https://console.groq.com/keys",
-  // "https://www.gentlemates.com/esports?game=call-of-duty",
+  "https://console.groq.com/keys",
+  "https://www.gentlemates.com/esports?game=call-of-duty",
   "https://vials-shiny.vercel.app/",
-  // "https://alexis-pernette-porfolio.vercel.app/",
+  "https://alexis-pernette-porfolio.vercel.app/",
 ];
 
 const rules = {
